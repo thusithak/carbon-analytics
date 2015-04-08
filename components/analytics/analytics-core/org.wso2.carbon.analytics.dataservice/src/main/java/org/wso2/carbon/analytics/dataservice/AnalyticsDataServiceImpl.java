@@ -18,19 +18,10 @@
  */
 package org.wso2.carbon.analytics.dataservice;
 
-import java.io.Serializable;
-import java.io.UnsupportedEncodingException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.Callable;
-
 import org.apache.lucene.analysis.Analyzer;
 import org.wso2.carbon.analytics.dataservice.clustering.AnalyticsClusterManager;
+import org.wso2.carbon.analytics.dataservice.commons.AnalyticsDrillDownRequest;
+import org.wso2.carbon.analytics.dataservice.commons.DrillDownResultEntry;
 import org.wso2.carbon.analytics.dataservice.commons.IndexType;
 import org.wso2.carbon.analytics.dataservice.commons.SearchResultEntry;
 import org.wso2.carbon.analytics.dataservice.commons.exception.AnalyticsIndexException;
@@ -46,6 +37,17 @@ import org.wso2.carbon.analytics.datasource.commons.exception.AnalyticsTimeoutEx
 import org.wso2.carbon.analytics.datasource.core.fs.AnalyticsFileSystem;
 import org.wso2.carbon.analytics.datasource.core.rs.AnalyticsRecordStore;
 import org.wso2.carbon.analytics.datasource.core.util.GenericUtils;
+
+import java.io.Serializable;
+import java.io.UnsupportedEncodingException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.Callable;
 
 /**
  * The implementation of {@link AnalyticsDataService}.
@@ -296,6 +298,12 @@ public class AnalyticsDataServiceImpl implements AnalyticsDataService {
     }
 
     @Override
+    public void setIndices(int tenantId, String tableName, Map<String, IndexType> columns,
+                           List<String> scoreParams) throws AnalyticsIndexException {
+        this.getIndexer().setIndices(tenantId, tableName, columns, scoreParams);
+    }
+
+    @Override
     public List<SearchResultEntry> search(int tenantId, String tableName, String language, String query,
             int start, int count) throws AnalyticsIndexException, AnalyticsException {
         return this.getIndexer().search(tenantId, tableName, language, query, start, count);
@@ -308,9 +316,21 @@ public class AnalyticsDataServiceImpl implements AnalyticsDataService {
     }
 
     @Override
+    public Map<String, List<DrillDownResultEntry>> drillDown(int tenantId, AnalyticsDrillDownRequest drillDownRequest)
+            throws AnalyticsIndexException {
+        return this.getIndexer().drillDown(tenantId, drillDownRequest);
+    }
+
+    @Override
     public Map<String, IndexType> getIndices(int tenantId, 
             String tableName) throws AnalyticsIndexException, AnalyticsException {
         return this.getIndexer().lookupIndices(tenantId, tableName);
+    }
+
+    @Override
+    public List<String> getScoreParams(int tenantId, String tableName)
+            throws AnalyticsIndexException, AnalyticsException {
+        return this.getIndexer().lookupScoreParams(tenantId, tableName);
     }
 
     @Override

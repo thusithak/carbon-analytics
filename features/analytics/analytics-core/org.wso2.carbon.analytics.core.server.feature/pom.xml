@@ -50,8 +50,13 @@
             <artifactId>org.wso2.carbon.analytics.dataservice</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.apache.lucene.wso2</groupId>
+            <groupId>org.wso2.orbit.org.apache.lucene</groupId>
             <artifactId>lucene</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.wso2.orbit.asm4</groupId>
+            <artifactId>asm4-all</artifactId>
+            <version>${asm4.orbit.version}</version>
         </dependency>
     </dependencies>
 
@@ -77,12 +82,13 @@
                             <propertiesFile>../../../../etc/feature.properties</propertiesFile>
                             <adviceFile>
                                 <properties>
-                                    <propertyDef>org.wso2.carbon.p2.category.type:server</propertyDef>
+                                    <propertyDef>org.wso2.carbon.p2.categoryName.type:server</propertyDef>
                                     <propertyDef>org.eclipse.equinox.p2.type.group:false</propertyDef>
                                 </properties>
                             </adviceFile>
                             <bundles>
-                                <bundleDef>org.apache.lucene.wso2:lucene</bundleDef>
+                                <bundleDef>org.wso2.orbit.org.apache.lucene:lucene</bundleDef>
+                                <bundleDef>org.wso2.orbit.asm4:asm4-all</bundleDef>
                                 <bundleDef>org.wso2.carbon.analytics:org.wso2.carbon.analytics.datasource.core</bundleDef>
                                 <bundleDef>org.wso2.carbon.analytics:org.wso2.carbon.analytics.dataservice</bundleDef>
                                 <bundleDef>org.wso2.carbon.analytics:org.wso2.carbon.analytics.dataservice.commons</bundleDef>

@@ -20,7 +20,6 @@ package org.wso2.carbon.analytics.messageconsole;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.wso2.carbon.CarbonConstants;
-import org.wso2.carbon.analytics.dataservice.AnalyticsServiceHolder;
 import org.wso2.carbon.analytics.dataservice.AuthorizationUtils;
 import org.wso2.carbon.analytics.dataservice.Constants;
 import org.wso2.carbon.analytics.dataservice.SecureAnalyticsDataService;
@@ -36,14 +35,18 @@ import org.wso2.carbon.analytics.messageconsole.beans.EntityBean;
 import org.wso2.carbon.analytics.messageconsole.beans.PermissionBean;
 import org.wso2.carbon.analytics.messageconsole.beans.RecordBean;
 import org.wso2.carbon.analytics.messageconsole.beans.RecordResultBean;
+import org.wso2.carbon.analytics.messageconsole.beans.ScheduleTaskInfo;
 import org.wso2.carbon.analytics.messageconsole.beans.TableBean;
 import org.wso2.carbon.analytics.messageconsole.exception.MessageConsoleException;
 import org.wso2.carbon.analytics.messageconsole.internal.ServiceHolder;
+import org.wso2.carbon.analytics.messageconsole.purging.AnalyticsDataPurgingTask;
 import org.wso2.carbon.context.CarbonContext;
 import org.wso2.carbon.core.AbstractAdmin;
+import org.wso2.carbon.ntask.common.TaskException;
+import org.wso2.carbon.ntask.core.TaskInfo;
+import org.wso2.carbon.ntask.core.TaskManager;
 import org.wso2.carbon.user.api.AuthorizationManager;
 import org.wso2.carbon.user.api.UserStoreException;
-import org.wso2.carbon.utils.multitenancy.MultitenantUtils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -59,18 +62,18 @@ public class MessageConsoleService extends AbstractAdmin {
 
     private static final Log logger = LogFactory.getLog(MessageConsoleService.class);
     private static final String LUCENE = "lucene";
-    private static final String AT_SIGN = "@";
     private static final String STRING = "STRING";
     private static final String INTEGER = "INTEGER";
     private static final String LONG = "LONG";
     private static final String FLOAT = "FLOAT";
     private static final String DOUBLE = "DOUBLE";
     private static final String BOOLEAN = "BOOLEAN";
+    public static final String AT_SIGN = "@";
 
     private SecureAnalyticsDataService analyticsDataService;
 
     public MessageConsoleService() {
-        this.analyticsDataService = ServiceHolder.getAnalyticsDataService();
+        this.analyticsDataService = ServiceHolder.getSecureAnalyticsDataService();
     }
 
     /**
@@ -123,7 +126,6 @@ public class MessageConsoleService extends AbstractAdmin {
      * @throws MessageConsoleException
      */
     public List<String> listTables() throws MessageConsoleException {
-
         String username = getUsername();
         if (logger.isDebugEnabled()) {
             logger.debug("Getting table list from data layer for user:" + username);
@@ -154,7 +156,6 @@ public class MessageConsoleService extends AbstractAdmin {
     public RecordResultBean getRecords(String tableName, long timeFrom, long timeTo, int startIndex, int recordCount,
                                        String searchQuery)
             throws MessageConsoleException {
-
         if (logger.isDebugEnabled()) {
             logger.debug("Search Query: " + searchQuery);
             logger.debug("timeFrom: " + timeFrom);
@@ -164,11 +165,9 @@ public class MessageConsoleService extends AbstractAdmin {
         }
 
         String username = getUsername();
-
         RecordResultBean recordResult = new RecordResultBean();
         RecordGroup[] results;
         long searchCount = 0;
-
         if (searchQuery != null && !searchQuery.isEmpty()) {
             try {
                 List<SearchResultEntry> searchResults = analyticsDataService.search(username, tableName, LUCENE,
@@ -176,7 +175,6 @@ public class MessageConsoleService extends AbstractAdmin {
                 List<String> ids = getRecordIds(searchResults);
                 results = analyticsDataService.get(username, tableName, 1, null, ids);
                 searchCount = analyticsDataService.searchCount(username, tableName, LUCENE, searchQuery);
-
                 if (logger.isDebugEnabled()) {
                     logger.debug("Query satisfied result count: " + searchResults.size());
                 }
@@ -197,7 +195,6 @@ public class MessageConsoleService extends AbstractAdmin {
                                                   " and for table:" + tableName, e);
             }
         }
-
         if (results != null) {
             List<RecordBean> recordBeanList = new ArrayList<>();
             List<Record> records;
@@ -218,7 +215,6 @@ public class MessageConsoleService extends AbstractAdmin {
             recordResult.setRecords(recordBeanList.toArray(recordBeans));
             recordResult.setTotalResultCount(searchCount);
         }
-
         return recordResult;
     }
 
@@ -233,7 +229,6 @@ public class MessageConsoleService extends AbstractAdmin {
             entityBeans[i++] = entityBean;
         }
         recordBean.setEntityBeans(entityBeans);
-
         return recordBean;
     }
 
@@ -253,7 +248,6 @@ public class MessageConsoleService extends AbstractAdmin {
      * @throws MessageConsoleException
      */
     public TableBean getTableInfo(String tableName) throws MessageConsoleException {
-
         String username = getUsername();
         TableBean table = new TableBean();
         table.setName(tableName);
@@ -277,7 +271,6 @@ public class MessageConsoleService extends AbstractAdmin {
             logger.error("Unable to get schema information for table :" + tableName, e);
             throw new MessageConsoleException("Unable to get schema information for table :" + tableName, e);
         }
-
         return table;
     }
 
@@ -289,11 +282,10 @@ public class MessageConsoleService extends AbstractAdmin {
      * @throws MessageConsoleException
      */
     public TableBean getTableInfoWithIndicesInfo(String tableName) throws MessageConsoleException {
-
         TableBean tableBean = getTableInfo(tableName);
         String username = getUsername();
         try {
-            if (AuthorizationUtils.isUserAuthorized(getTenantId(username), username, Constants.PERMISSION_GET_INDEXING)) {
+            if (AuthorizationUtils.isUserAuthorized(getTenantId(), username, Constants.PERMISSION_GET_INDEXING)) {
                 Map<String, IndexType> indices = analyticsDataService.getIndices(username, tableName);
                 for (ColumnBean columnBean : tableBean.getColumns()) {
                     if (indices.containsKey(columnBean.getName())) {
@@ -316,9 +308,7 @@ public class MessageConsoleService extends AbstractAdmin {
      * @throws MessageConsoleException
      */
     public void deleteRecords(String table, String[] recordIds) throws MessageConsoleException {
-
         String username = getUsername();
-
         String ids = Arrays.toString(recordIds);
         if (logger.isDebugEnabled()) {
             logger.debug(ids + " are going to delete from " + table + " in tenant:" + username);
@@ -341,30 +331,25 @@ public class MessageConsoleService extends AbstractAdmin {
      * @throws MessageConsoleException
      */
     public RecordBean addRecord(String table, String[] columns, String[] values) throws MessageConsoleException {
-
         int tenantId = CarbonContext.getThreadLocalCarbonContext().getTenantId();
         String username = getUsername();
-
         if (logger.isDebugEnabled()) {
             logger.debug("New record {column: " + Arrays.toString(columns) + ", values: " + Arrays.toString(values) +
                          "} going to add to" + table);
         }
-
         RecordBean recordBean;
         try {
             Map<String, Object> objectMap = getRecordPropertyMap(table, columns, values, username);
-
             Record record = new Record(tenantId, table, objectMap, System.currentTimeMillis());
             recordBean = createRecordBean(record);
-
             List<Record> records = new ArrayList<>(1);
             records.add(record);
             analyticsDataService.put(username, records);
+            recordBean.setRecordId(records.get(0).getId());
         } catch (Exception e) {
             logger.error("Unable to add record {column: " + Arrays.toString(columns) + ", values: " + Arrays.toString(values) + " } to table :" + table, e);
             throw new MessageConsoleException("Unable to add record {column: " + Arrays.toString(columns) + ", values: " + Arrays.toString(values) + " } to table :" + table, e);
         }
-
         return recordBean;
     }
 
@@ -380,43 +365,34 @@ public class MessageConsoleService extends AbstractAdmin {
      */
     public RecordBean updateRecord(String table, String recordId, String[] columns, String[] values)
             throws MessageConsoleException {
-
         int tenantId = CarbonContext.getThreadLocalCarbonContext().getTenantId();
         String username = getUsername();
-
         if (logger.isDebugEnabled()) {
             logger.debug("Record {id: " + recordId + ", column: " + Arrays.toString(columns) + ", values: " + Arrays.toString
                     (values) + "} going to update to" + table);
         }
-
-        RecordBean recordBean;
-        Record originalRecord;
+        RecordBean recordBean = new RecordBean();
         try {
-            originalRecord = getRecord(table, recordId, username);
-        } catch (AnalyticsException e) {
-            logger.error("Unable to find record[" + recordId + "] in table[" + table + "]", e);
-            throw new MessageConsoleException("Unable to find record[" + recordId + "] in table[" + table + "]", e);
-        }
-        if (originalRecord != null) {
-            try {
+            Record originalRecord = getRecord(table, recordId, username);
+            if (originalRecord != null) {
                 Map<String, Object> objectMap = getRecordPropertyMap(table, columns, values, username);
-
-                Record record = new Record(recordId, tenantId, table, objectMap, originalRecord.getTimestamp());
+                for (Map.Entry<String, Object> newEntry : objectMap.entrySet()) {
+                    if (originalRecord.getValues().containsKey(newEntry.getKey())) {
+                        originalRecord.getValues().put(newEntry.getKey(), newEntry.getValue());
+                    }
+                }
+                Record record = new Record(recordId, tenantId, table, originalRecord.getValues(), System.currentTimeMillis());
                 recordBean = createRecordBean(record);
-
                 List<Record> records = new ArrayList<>(1);
                 records.add(record);
                 analyticsDataService.put(username, records);
-            } catch (Exception e) {
-                logger.error("Unable to update record {id: " + recordId + ", column: " + Arrays.toString(columns) + ", " +
-                             "values: " + Arrays.toString(values) + " } to table :" + table, e);
-                throw new MessageConsoleException("Unable to update record {id: " + recordId + ", column: " + Arrays
-                        .toString(columns) + ", values: " + Arrays.toString(values) + " } to table :" + table, e);
             }
-        } else {
-            throw new MessageConsoleException("Unable to find record[" + recordId + "] in table[" + table + "]");
+        } catch (Exception e) {
+            logger.error("Unable to update record {id: " + recordId + ", column: " + Arrays.toString(columns) + ", " +
+                         "values: " + Arrays.toString(values) + " } to table :" + table, e);
+            throw new MessageConsoleException("Unable to update record {id: " + recordId + ", column: " + Arrays
+                    .toString(columns) + ", values: " + Arrays.toString(values) + " } to table :" + table, e);
         }
-
         return recordBean;
     }
 
@@ -426,45 +402,13 @@ public class MessageConsoleService extends AbstractAdmin {
         AnalyticsSchema schema = analyticsDataService.getTableSchema(username, table);
         if (schema != null && schema.getColumns() != null) {
             Map<String, AnalyticsSchema.ColumnType> columnsMetaInfo = schema.getColumns();
-
             if (columns != null) {
                 for (int i = 0; i < columns.length; i++) {
                     String columnName = columns[i];
                     String stringValue = values[i];
                     if (columnName != null) {
                         AnalyticsSchema.ColumnType columnType = columnsMetaInfo.get(columnName);
-                        Object value = stringValue;
-                        switch (columnType) {
-                            case STRING:
-                                break;
-                            case INTEGER:
-                                if (stringValue == null || stringValue.isEmpty()) {
-                                    stringValue = "0";
-                                }
-                                value = Integer.valueOf(stringValue);
-                                break;
-                            case LONG:
-                                if (stringValue == null || stringValue.isEmpty()) {
-                                    stringValue = "0";
-                                }
-                                value = Long.valueOf(stringValue);
-                                break;
-                            case BOOLEAN:
-                                value = Boolean.valueOf(stringValue);
-                                break;
-                            case FLOAT:
-                                if (stringValue == null || stringValue.isEmpty()) {
-                                    stringValue = "0.0";
-                                }
-                                value = Float.valueOf(stringValue);
-                                break;
-                            case DOUBLE:
-                                if (stringValue == null || stringValue.isEmpty()) {
-                                    stringValue = "0.0";
-                                }
-                                value = Double.valueOf(stringValue);
-                                break;
-                        }
+                        Object value = getObject(stringValue, columnType.name());
                         objectMap.put(columnName, value);
                     }
                 }
@@ -488,21 +432,28 @@ public class MessageConsoleService extends AbstractAdmin {
         try {
             Record originalRecord = getRecord(table, recordId, username);
             AnalyticsSchema schema = analyticsDataService.getTableSchema(username, table);
-
-            if (originalRecord != null && schema != null && schema.getColumns() != null) {
-                Map<String, AnalyticsSchema.ColumnType> schemaColumns = schema.getColumns();
+            if (originalRecord != null) {
                 Map<String, Object> recordValues = originalRecord.getValues();
-                for (Map.Entry<String, Object> objectEntry : recordValues.entrySet()) {
-                    if (!schemaColumns.containsKey(objectEntry.getKey())) {
-                        EntityBean entityBean;
-                        if (objectEntry.getValue() != null) {
-                            entityBean = new EntityBean(objectEntry.getKey(), String.valueOf(objectEntry.getValue()), objectEntry
-                                    .getValue().getClass().getSimpleName().toUpperCase());
-
-                        } else {
-                            entityBean = new EntityBean(objectEntry.getKey(), "NULL", STRING);
+                if (schema != null) {
+                    if (logger.isDebugEnabled()) {
+                        logger.debug("Table schema[" + table + "] is not null");
+                    }
+                    Map<String, AnalyticsSchema.ColumnType> schemaColumns = schema.getColumns();
+                    if (schemaColumns != null && !schemaColumns.isEmpty()) {
+                        for (Map.Entry<String, Object> objectEntry : recordValues.entrySet()) {
+                            if (!schemaColumns.containsKey(objectEntry.getKey())) {
+                                entityBeansList.add(getEntityBean(objectEntry));
+                            }
                         }
-                        entityBeansList.add(entityBean);
+                    }
+                }
+                if (entityBeansList.isEmpty()) {
+                    if (logger.isDebugEnabled()) {
+                        logger.debug("Either table schema[" + table + "] null or empty. Adding all records to " +
+                                     "arbitrary list");
+                    }
+                    for (Map.Entry<String, Object> objectEntry : recordValues.entrySet()) {
+                        entityBeansList.add(getEntityBean(objectEntry));
                     }
                 }
             }
@@ -510,9 +461,20 @@ public class MessageConsoleService extends AbstractAdmin {
             logger.error("Unable to get arbitrary fields for id [" + recordId + "] from table :" + table, e);
             throw new MessageConsoleException("Unable to get arbitrary fields for id [" + recordId + "] from table :" + table, e);
         }
-
         EntityBean[] entityBeans = new EntityBean[entityBeansList.size()];
         return entityBeansList.toArray(entityBeans);
+    }
+
+    private EntityBean getEntityBean(Map.Entry<String, Object> objectEntry) {
+        EntityBean entityBean;
+        if (objectEntry.getValue() != null) {
+            entityBean = new EntityBean(objectEntry.getKey(), String.valueOf(objectEntry.getValue()), objectEntry
+                    .getValue().getClass().getSimpleName().toUpperCase());
+
+        } else {
+            entityBean = new EntityBean(objectEntry.getKey(), "NULL", STRING);
+        }
+        return entityBean;
     }
 
     private Record getRecord(String table, String recordId, String username) throws AnalyticsException {
@@ -537,19 +499,19 @@ public class MessageConsoleService extends AbstractAdmin {
     public void deleteArbitraryField(String table, String recordId, String fieldName) throws MessageConsoleException {
         int tenantId = CarbonContext.getThreadLocalCarbonContext().getTenantId();
         String username = getUsername();
-        List<String> ids = new ArrayList<>(1);
-        ids.add(recordId);
         try {
-            RecordGroup[] results = analyticsDataService.get(username, table, 1, null, ids);
-            List<Record> records = GenericUtils.listRecords(analyticsDataService, results);
-            if (records != null && !records.isEmpty()) {
-                Record record = records.get(0);
+            Record record = getRecord(table, recordId, username);
+            if (record != null) {
                 Map<String, Object> recordValues = record.getValues();
                 recordValues.remove(fieldName);
-                Record editedRecord = new Record(recordId, tenantId, table, recordValues, record.getTimestamp());
-                records.clear();
+                Record editedRecord = new Record(recordId, tenantId, table, recordValues, System.currentTimeMillis());
+                List<Record> records = new ArrayList<>(1);
                 records.add(editedRecord);
                 analyticsDataService.put(username, records);
+                if (logger.isDebugEnabled()) {
+                    logger.debug("Arbitrary field[" + fieldName + "] removed from record[" + recordId + "] in the" +
+                                 table + " successfully.");
+                }
             }
         } catch (AnalyticsException e) {
             logger.error("Unable to delete arbitrary field[" + fieldName + "] for id [" + recordId + "] from table :" + table, e);
@@ -569,72 +531,74 @@ public class MessageConsoleService extends AbstractAdmin {
      */
     public void putArbitraryField(String table, String recordId, String fieldName, String value, String type)
             throws MessageConsoleException {
-
         int tenantId = CarbonContext.getThreadLocalCarbonContext().getTenantId();
         String username = getUsername();
-        List<String> ids = new ArrayList<>(1);
-        ids.add(recordId);
         try {
-            RecordGroup[] results = analyticsDataService.get(username, table, 1, null, ids);
-            List<Record> records = GenericUtils.listRecords(analyticsDataService, results);
-            if (records != null && !records.isEmpty()) {
-                Record record = records.get(0);
+            Record record = getRecord(table, recordId, username);
+            if (record != null) {
                 Map<String, Object> recordValues = record.getValues();
                 recordValues.remove(fieldName);
-                Object convertedValue;
-                switch (type) {
-                    case STRING: {
-                        convertedValue = String.valueOf(value);
-                        break;
-                    }
-                    case INTEGER: {
-                        if (value == null || value.isEmpty()) {
-                            value = "0";
-                        }
-                        convertedValue = Integer.valueOf(value);
-                        break;
-                    }
-                    case LONG: {
-                        if (value == null || value.isEmpty()) {
-                            value = "0";
-                        }
-                        convertedValue = Integer.valueOf(value);
-                        break;
-                    }
-                    case BOOLEAN: {
-                        convertedValue = Boolean.valueOf(value);
-                        break;
-                    }
-                    case FLOAT: {
-                        if (value == null || value.isEmpty()) {
-                            value = "0.0";
-                        }
-                        convertedValue = Float.valueOf(value);
-                        break;
-                    }
-                    case DOUBLE: {
-                        if (value == null || value.isEmpty()) {
-                            value = "0.0";
-                        }
-                        convertedValue = Double.valueOf(value);
-                        break;
-                    }
-                    default: {
-                        convertedValue = value;
-                    }
-                }
-
+                Object convertedValue = getObject(value, type);
                 recordValues.put(fieldName, convertedValue);
-
-                records.clear();
-                Record editedRecord = new Record(recordId, tenantId, table, recordValues, record.getTimestamp());
+                Record editedRecord = new Record(recordId, tenantId, table, recordValues, System.currentTimeMillis());
+                List<Record> records = new ArrayList<>(1);
                 records.add(editedRecord);
                 analyticsDataService.put(username, records);
+                if (logger.isDebugEnabled()) {
+                    logger.debug("Updated arbitrary field[" + fieldName + "] in record[" + recordId + "] in the  " +
+                                 table + " successfully.");
+                }
             }
         } catch (AnalyticsException e) {
             logger.error("Unable to update arbitrary field[" + fieldName + "] for id [" + recordId + "] from table :" + table, e);
             throw new MessageConsoleException("Unable to update arbitrary field[" + fieldName + "] for id [" + recordId + "] from table :" + table, e);
         }
+    }
+
+    private Object getObject(String value, String type) {
+        Object convertedValue;
+        switch (type) {
+            case STRING: {
+                convertedValue = String.valueOf(value);
+                break;
+            }
+            case INTEGER: {
+                if (value == null || value.isEmpty()) {
+                    value = "0";
+                }
+                convertedValue = Integer.valueOf(value);
+                break;
+            }
+            case LONG: {
+                if (value == null || value.isEmpty()) {
+                    value = "0";
+                }
+                convertedValue = Integer.valueOf(value);
+                break;
+            }
+            case BOOLEAN: {
+                convertedValue = Boolean.valueOf(value);
+                break;
+            }
+            case FLOAT: {
+                if (value == null || value.isEmpty()) {
+                    value = "0.0";
+                }
+                convertedValue = Float.valueOf(value);
+                break;
+            }
+            case DOUBLE: {
+                if (value == null || value.isEmpty()) {
+                    value = "0.0";
+                }
+                convertedValue = Double.valueOf(value);
+                break;
+            }
+            default: {
+                convertedValue = value;
+            }
+        }
+        return convertedValue;
     }
 
     /**
@@ -645,16 +609,13 @@ public class MessageConsoleService extends AbstractAdmin {
      * @throws MessageConsoleException
      */
     public void createTable(TableBean tableInfo) throws MessageConsoleException {
-
         String username = getUsername();
-
         try {
             analyticsDataService.createTable(username, tableInfo.getName());
         } catch (AnalyticsException e) {
             logger.error("Unable to create table: " + e.getMessage(), e);
             throw new MessageConsoleException("Unable to create table: " + e.getMessage(), e);
         }
-
         List<String> primaryKeys = new ArrayList<>();
         Map<String, AnalyticsSchema.ColumnType> columns = new HashMap<>();
         Map<String, IndexType> indexColumns = new HashMap<>();
@@ -671,19 +632,16 @@ public class MessageConsoleService extends AbstractAdmin {
                 }
             }
         }
-        if (!primaryKeys.isEmpty()) {
-            try {
-                AnalyticsSchema schema = new AnalyticsSchema(columns, primaryKeys);
-                analyticsDataService.setTableSchema(username, tableInfo.getName(), schema);
-            } catch (AnalyticsException e) {
-                logger.error("Unable to save table schema information: " + e.getMessage(), e);
-                throw new MessageConsoleException("Unable to save table schema information: " + e.getMessage(), e);
-            }
+        try {
+            AnalyticsSchema schema = new AnalyticsSchema(columns, primaryKeys);
+            analyticsDataService.setTableSchema(username, tableInfo.getName(), schema);
+        } catch (AnalyticsException e) {
+            logger.error("Unable to save table schema information: " + e.getMessage(), e);
+            throw new MessageConsoleException("Unable to save table schema information: " + e.getMessage(), e);
         }
-
         if (!indexColumns.isEmpty()) {
             try {
-                if (AuthorizationUtils.isUserAuthorized(getTenantId(username), username, Constants
+                if (AuthorizationUtils.isUserAuthorized(getTenantId(), username, Constants
                         .PERMISSION_SET_INDEXING)) {
                     analyticsDataService.setIndices(username, tableInfo.getName(), indexColumns);
                 }
@@ -701,9 +659,7 @@ public class MessageConsoleService extends AbstractAdmin {
      * @throws MessageConsoleException
      */
     public void editTable(TableBean tableInfo) throws MessageConsoleException {
-
         String username = getUsername();
-
         List<String> primaryKeys = new ArrayList<>();
         Map<String, AnalyticsSchema.ColumnType> columns = new HashMap<>();
         Map<String, IndexType> indexColumns = new HashMap<>();
@@ -720,7 +676,6 @@ public class MessageConsoleService extends AbstractAdmin {
                 }
             }
         }
-
         try {
             AnalyticsSchema schema = new AnalyticsSchema(columns, primaryKeys);
             analyticsDataService.setTableSchema(username, tableInfo.getName(), schema);
@@ -728,13 +683,12 @@ public class MessageConsoleService extends AbstractAdmin {
             logger.error("Unable to save table schema information: " + e.getMessage(), e);
             throw new MessageConsoleException("Unable to save table schema information: " + e.getMessage(), e);
         }
-
         try {
-            if (AuthorizationUtils.isUserAuthorized(getTenantId(username), username, Constants
+            if (AuthorizationUtils.isUserAuthorized(getTenantId(), username, Constants
                     .PERMISSION_DELETE_INDEXING)) {
                 analyticsDataService.clearIndices(username, tableInfo.getName());
                 if (!indexColumns.isEmpty()) {
-                    if (AuthorizationUtils.isUserAuthorized(getTenantId(username), username, Constants
+                    if (AuthorizationUtils.isUserAuthorized(getTenantId(), username, Constants
                             .PERMISSION_SET_INDEXING)) {
                         analyticsDataService.setIndices(username, tableInfo.getName(), indexColumns);
                     }
@@ -791,7 +745,7 @@ public class MessageConsoleService extends AbstractAdmin {
      */
     @Override
     protected String getUsername() {
-        return super.getUsername() + AT_SIGN + getTenantDomain();
+        return super.getUsername() + AT_SIGN + super.getTenantDomain();
     }
 
     /**
@@ -804,18 +758,96 @@ public class MessageConsoleService extends AbstractAdmin {
         try {
             String username = getUsername();
             analyticsDataService.deleteTable(username, table);
+            try {
+                TaskManager taskManager = ServiceHolder.getTaskService().getTaskManager(org.wso2.carbon.analytics.messageconsole.Constants
+                                                                                                .ANALYTICS_DATA_PURGING);
+                if (taskManager.isTaskScheduled(getDataPurgingTaskName(table))) {
+                    taskManager.deleteTask(getDataPurgingTaskName(table));
+                }
+            } catch (TaskException e) {
+                logger.error(e);
+            }
+            if (logger.isDebugEnabled()) {
+                logger.debug(table + " deleted successfully");
+            }
         } catch (AnalyticsException e) {
             logger.error("Unable to delete table: " + table, e);
             throw new MessageConsoleException("Unable to delete table: " + table, e);
         }
     }
 
-    private int getTenantId(String username) throws AnalyticsException {
+    private int getTenantId() {
+        return CarbonContext.getThreadLocalCarbonContext().getTenantId();
+    }
+
+    /**
+     * To check whether underneath data layer support pagination or not
+     *
+     * @return boolean true or false
+     */
+    public boolean isPaginationSupported() {
+        return analyticsDataService.isPaginationSupported();
+    }
+
+    /**
+     * Scheduling data purging task for given table
+     *
+     * @param table           Table name that need to purge
+     * @param cronString      Task cron schedule  information
+     * @param retentionPeriod Data retention period
+     * @throws MessageConsoleException
+     */
+    public void scheduleDataPurging(String table, String cronString, int retentionPeriod)
+            throws MessageConsoleException {
         try {
-            String tenantDomain = MultitenantUtils.getTenantDomain(username);
-            return AnalyticsServiceHolder.getRealmService().getTenantManager().getTenantId(tenantDomain);
-        } catch (UserStoreException e) {
-            throw new AnalyticsException("Unable to get tenantId for user: " + username, e);
+            TaskManager taskManager = ServiceHolder.getTaskService().getTaskManager(org.wso2.carbon.analytics.messageconsole.Constants
+                                                                                            .ANALYTICS_DATA_PURGING);
+            TaskInfo taskInfo = createDataPurgingTask(table, cronString, retentionPeriod);
+            taskManager.deleteTask(taskInfo.getName());
+            if (cronString != null) {
+                taskManager.registerTask(taskInfo);
+                taskManager.scheduleTask(taskInfo.getName());
+            }
+        } catch (TaskException e) {
+            throw new MessageConsoleException("Unable to schedule a purging task for " + table + " with corn " +
+                                              "schedule[" + cronString + "] due to " + e.getMessage(), e);
         }
+    }
+
+    public ScheduleTaskInfo getDataPurgingDetails(String table) throws MessageConsoleException {
+        ScheduleTaskInfo taskInfo = new ScheduleTaskInfo();
+        try {
+            TaskManager taskManager = ServiceHolder.getTaskService().getTaskManager(org.wso2.carbon.analytics.messageconsole.Constants
+                                                                                            .ANALYTICS_DATA_PURGING);
+            if (taskManager.isTaskScheduled(getDataPurgingTaskName(table))) {
+                TaskInfo task = taskManager.getTask(getDataPurgingTaskName(table));
+                if (task != null) {
+                    taskInfo.setCronString(task.getProperties().get(org.wso2.carbon.analytics.messageconsole.Constants.CRON_STRING));
+                    taskInfo.setRetentionPeriod(Integer.parseInt(task.getProperties().get(org.wso2.carbon.analytics.messageconsole.Constants
+                                                                                                  .RETENTION_PERIOD)));
+                }
+            }
+        } catch (TaskException e) {
+            throw new MessageConsoleException("Unable to get schedule details for " + table + " due to " + e
+                    .getMessage(), e);
+        }
+
+        return taskInfo;
+    }
+
+    private TaskInfo createDataPurgingTask(String table, String cronString, int retentionPeriod) {
+        String taskName = getDataPurgingTaskName(table);
+        TaskInfo.TriggerInfo triggerInfo = new TaskInfo.TriggerInfo(cronString);
+        Map<String, String> taskProperties = new HashMap<>(4);
+        taskProperties.put(org.wso2.carbon.analytics.messageconsole.Constants.RETENTION_PERIOD, String
+                .valueOf(retentionPeriod));
+        taskProperties.put(org.wso2.carbon.analytics.messageconsole.Constants.TABLE, table);
+        taskProperties.put(org.wso2.carbon.analytics.messageconsole.Constants.TENANT_ID, String.valueOf(CarbonContext.getThreadLocalCarbonContext().getTenantId()));
+        taskProperties.put(org.wso2.carbon.analytics.messageconsole.Constants.CRON_STRING, cronString);
+        return new TaskInfo(taskName, AnalyticsDataPurgingTask.class.getName(), taskProperties, triggerInfo);
+    }
+
+    private String getDataPurgingTaskName(String table) {
+        return getTenantDomain() + "_" + table + "_" + "data_purging_task";
     }
 }

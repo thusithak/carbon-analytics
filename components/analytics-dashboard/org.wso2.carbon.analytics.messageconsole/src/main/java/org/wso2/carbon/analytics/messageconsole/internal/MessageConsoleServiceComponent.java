@@ -20,42 +20,76 @@ package org.wso2.carbon.analytics.messageconsole.internal;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.osgi.framework.BundleContext;
 import org.osgi.service.component.ComponentContext;
+import org.wso2.carbon.analytics.dataservice.AnalyticsDataService;
 import org.wso2.carbon.analytics.dataservice.SecureAnalyticsDataService;
-import org.wso2.carbon.analytics.messageconsole.MessageConsoleService;
+import org.wso2.carbon.analytics.messageconsole.Constants;
+import org.wso2.carbon.ntask.common.TaskException;
+import org.wso2.carbon.ntask.core.service.TaskService;
 
 /**
  * This class represents the analytics message console service declarative services component.
- *
  * @scr.component name="messageconsole.component" immediate="true"
- * @scr.reference name="analytics.component" interface="org.wso2.carbon.analytics.dataservice.SecureAnalyticsDataService"
+ * @scr.reference name="secure.analytics.component" interface="org.wso2.carbon.analytics.dataservice.SecureAnalyticsDataService"
+ * cardinality="1..1" policy="dynamic" bind="setSecureAnalyticsDataService" unbind="unsetSecureAnalyticsDataService"
+ * @scr.reference name="analytics.component" interface="org.wso2.carbon.analytics.dataservice.AnalyticsDataService"
  * cardinality="1..1" policy="dynamic" bind="setAnalyticsDataService" unbind="unsetAnalyticsDataService"
+ * @scr.reference name="ntask.component" interface="org.wso2.carbon.ntask.core.service.TaskService"
+ * cardinality="1..1" policy="dynamic" bind="setTaskService" unbind="unsetTaskService"
  */
 public class MessageConsoleServiceComponent {
-
     private static final Log logger = LogFactory.getLog(MessageConsoleServiceComponent.class);
 
     protected void activate(ComponentContext ctx) {
-
         if (logger.isDebugEnabled()) {
             logger.debug("Activating Analytics MessageConsoleServiceComponent module.");
         }
-        BundleContext bundleContext = ctx.getBundleContext();
-        bundleContext.registerService(MessageConsoleService.class, new MessageConsoleService(), null);
+        try {
+            ServiceHolder.getTaskService().registerTaskType(Constants.ANALYTICS_DATA_PURGING);
+        } catch (TaskException e) {
+            logger.error("Unable to register analytics data purging task type", e);
+        }
     }
 
-    protected void setAnalyticsDataService(SecureAnalyticsDataService secureAnalyticsDataService) {
+    protected void setSecureAnalyticsDataService(SecureAnalyticsDataService secureAnalyticsDataService) {
         if (logger.isDebugEnabled()) {
             logger.info("Setting the Secure Analytics Data Service");
         }
-        ServiceHolder.setAnalyticsDataService(secureAnalyticsDataService);
+        ServiceHolder.setSecureAnalyticsDataService(secureAnalyticsDataService);
     }
 
-    protected void unsetAnalyticsDataService(SecureAnalyticsDataService secureAnalyticsDataService) {
+    protected void unsetSecureAnalyticsDataService(SecureAnalyticsDataService secureAnalyticsDataService) {
         if (logger.isDebugEnabled()) {
             logger.info("Unsetting the Secure Analytics Data Service");
         }
+        ServiceHolder.setSecureAnalyticsDataService(null);
+    }
+
+    protected void setAnalyticsDataService(AnalyticsDataService analyticsDataService) {
+        if (logger.isDebugEnabled()) {
+            logger.info("Setting the Analytics Data Service");
+        }
+        ServiceHolder.setAnalyticsDataService(analyticsDataService);
+    }
+
+    protected void unsetAnalyticsDataService(AnalyticsDataService analyticsDataService) {
+        if (logger.isDebugEnabled()) {
+            logger.info("Unsetting the Analytics Data Service");
+        }
         ServiceHolder.setAnalyticsDataService(null);
+    }
+
+    protected void setTaskService(TaskService taskService) {
+        if (logger.isDebugEnabled()) {
+            logger.debug("Setting the Task Service");
+        }
+        ServiceHolder.setTaskService(taskService);
+    }
+
+    protected void unsetTaskService(TaskService taskService) {
+        if (logger.isDebugEnabled()) {
+            logger.debug("Unsetting the Task Service");
+        }
+        ServiceHolder.setTaskService(null);
     }
 }

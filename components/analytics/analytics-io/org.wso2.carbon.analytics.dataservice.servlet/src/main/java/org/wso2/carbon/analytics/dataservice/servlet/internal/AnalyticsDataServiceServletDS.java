@@ -17,7 +17,6 @@
 */
 package org.wso2.carbon.analytics.dataservice.servlet.internal;
 
-import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -25,9 +24,10 @@ import org.osgi.service.component.ComponentContext;
 import org.osgi.service.http.HttpService;
 import org.osgi.service.http.NamespaceException;
 import org.wso2.carbon.analytics.dataservice.AnalyticsDataService;
-import org.wso2.carbon.analytics.dataservice.api.commons.AnalyticsAPIConstants;
+import org.wso2.carbon.analytics.dataservice.io.commons.AnalyticsAPIConstants;
 import org.wso2.carbon.analytics.dataservice.servlet.*;
 import org.wso2.carbon.identity.authentication.AuthenticationService;
+import org.wso2.carbon.user.core.service.RealmService;
 
 import javax.servlet.ServletException;
 import java.util.Hashtable;
@@ -43,6 +43,8 @@ import java.util.Hashtable;
  * cardinality="1..1" policy="dynamic" bind="setHttpService" unbind="unsetHttpService"
  * @scr.reference name="hazelcast.instance.service" interface="com.hazelcast.core.HazelcastInstance"
  * cardinality="0..1" policy="dynamic" bind="setHazelcastInstance" unbind="unsetHazelcastInstance"
+ * @scr.reference name="user.realmservice.default" interface="org.wso2.carbon.user.core.service.RealmService"
+ * cardinality="1..1" policy="dynamic" bind="setRealmService" unbind="unsetRealmService"
  */
 public class AnalyticsDataServiceServletDS {
     private static final Log log = LogFactory.getLog(AnalyticsDataServiceServletDS.class);
@@ -113,6 +115,14 @@ public class AnalyticsDataServiceServletDS {
 
     protected void unsetHazelcastInstance(HazelcastInstance hazelcastInstance){
         ServiceHolder.setHazelcastInstance(null);
+    }
+
+    protected void setRealmService(RealmService realmService){
+        ServiceHolder.setRealmService(realmService);
+    }
+
+    protected void unsetRealmService(RealmService realmService){
+        ServiceHolder.setRealmService(null);
     }
 }
 

@@ -33,6 +33,7 @@ import org.wso2.carbon.analytics.messageconsole.stub.beans.EntityBean;
 import org.wso2.carbon.analytics.messageconsole.stub.beans.PermissionBean;
 import org.wso2.carbon.analytics.messageconsole.stub.beans.RecordBean;
 import org.wso2.carbon.analytics.messageconsole.stub.beans.RecordResultBean;
+import org.wso2.carbon.analytics.messageconsole.stub.beans.ScheduleTaskInfo;
 import org.wso2.carbon.analytics.messageconsole.stub.beans.TableBean;
 import org.wso2.carbon.messageconsole.ui.beans.Column;
 import org.wso2.carbon.messageconsole.ui.beans.Permissions;
@@ -42,6 +43,7 @@ import org.wso2.carbon.messageconsole.ui.beans.ResponseArbitraryFieldColumn;
 import org.wso2.carbon.messageconsole.ui.beans.ResponseRecord;
 import org.wso2.carbon.messageconsole.ui.beans.ResponseResult;
 import org.wso2.carbon.messageconsole.ui.beans.ResponseTable;
+import org.wso2.carbon.messageconsole.ui.beans.ScheduleTask;
 import org.wso2.carbon.messageconsole.ui.beans.TableSchemaColumn;
 import org.wso2.carbon.messageconsole.ui.exception.MessageConsoleException;
 import org.wso2.carbon.messageconsole.ui.serializers.ResponseArbitraryFieldSerializer;
@@ -50,6 +52,7 @@ import org.wso2.carbon.messageconsole.ui.serializers.ResponseRecordSerializer;
 import org.wso2.carbon.messageconsole.ui.serializers.ResponseResultSerializer;
 
 import java.lang.reflect.Type;
+import java.rmi.RemoteException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -82,6 +85,9 @@ public class MessageConsoleConnector {
     public static final int TYPE_CREATE_TABLE = 10;
     public static final int TYPE_DELETE_TABLE = 11;
     public static final int TYPE_GET_TABLE_INFO = 12;
+    public static final int TYPE_GET_PURGING_TASK_INFO = 13;
+    public static final int TYPE_SAVE_PURGING_TASK_INFO = 14;
+    public static final int TYPE_LIST_TABLE = 15;
 
     private MessageConsoleStub stub;
     private static final GsonBuilder RESPONSE_RESULT_BUILDER = new GsonBuilder().registerTypeAdapter(ResponseResult.class,
@@ -131,27 +137,25 @@ public class MessageConsoleConnector {
         return permissions;
     }
 
-    public String[] getTableList() {
+    public String getTableList() {
+        Gson gson = new Gson();
         String[] tableList = null;
         try {
             tableList = stub.listTables();
         } catch (Exception e) {
             log.error("Unable to get table list:" + e.getMessage(), e);
         }
-
         if (tableList == null) {
             if (log.isDebugEnabled()) {
                 log.debug("Received an empty table name list!");
             }
             tableList = new String[0];
         }
-
-        return tableList;
+        return gson.toJson(tableList);
     }
 
     public String getRecords(String tableName, long timeFrom, long timeTo, int startIndex, int pageSize, String
             searchQuery) {
-
         if (log.isDebugEnabled()) {
             log.debug("Search Query: " + searchQuery);
             log.debug("timeFrom: " + timeFrom);
@@ -184,7 +188,6 @@ public class MessageConsoleConnector {
             responseResult.setResult(ERROR);
             responseResult.setMessage(errorMsg);
         }
-
         return gson.toJson(responseResult);
     }
 
@@ -203,13 +206,11 @@ public class MessageConsoleConnector {
     }
 
     public String getTableInfo(String tableName) {
-
         Gson gson = new GsonBuilder().serializeNulls().create();
         TableBean tableInfo;
         ResponseTable table = new ResponseTable();
         try {
             tableInfo = stub.getTableInfo(tableName);
-
             table.setName(tableInfo.getName());
             List<ResponseTable.Column> columns = new ArrayList<>();
             if (tableInfo.getColumns() != null) {
@@ -221,35 +222,29 @@ public class MessageConsoleConnector {
                     column.setDisplay(resultColumn.getDisplay());
                     columns.add(column);
                 }
-
-                // Adding recordId column as a hidden field
-                ResponseTable.Column recordId = new ResponseTable().new Column();
-                recordId.setName(RECORD_ID);
-                recordId.setPrimary(false);
-                recordId.setType("STRING");
-                recordId.setDisplay(false);
-                recordId.setKey(true);
-                columns.add(recordId);
-
-                ResponseTable.Column timestamp = new ResponseTable().new Column();
-                timestamp.setName(TIMESTAMP);
-                timestamp.setPrimary(false);
-                timestamp.setType("LONG");
-                timestamp.setDisplay(true);
-                columns.add(timestamp);
-
-                table.setColumns(columns);
             }
-
+            // Adding recordId column as a hidden field
+            ResponseTable.Column recordId = new ResponseTable().new Column();
+            recordId.setName(RECORD_ID);
+            recordId.setPrimary(false);
+            recordId.setType("STRING");
+            recordId.setDisplay(false);
+            recordId.setKey(true);
+            columns.add(recordId);
+            ResponseTable.Column timestamp = new ResponseTable().new Column();
+            timestamp.setName(TIMESTAMP);
+            timestamp.setPrimary(false);
+            timestamp.setType("STRING");
+            timestamp.setDisplay(true);
+            columns.add(timestamp);
+            table.setColumns(columns);
         } catch (Exception e) {
             log.error("Unable to get table information for table:" + tableName, e);
         }
-
         return gson.toJson(table);
     }
 
     public String deleteRecords(String table, String[] recordIds) {
-
         if (log.isDebugEnabled()) {
             log.debug("Records[" + Arrays.toString(recordIds) + "] going to delete from" + table);
         }
@@ -264,12 +259,10 @@ public class MessageConsoleConnector {
             responseResult.setResult(ERROR);
             responseResult.setMessage(errorMsg);
         }
-
         return gson.toJson(responseResult);
     }
 
     public String addRecord(String table, String[] columns, String[] values) {
-
         if (log.isDebugEnabled()) {
             log.debug("New record {column: " + Arrays.toString(columns) + ", values: " + Arrays.toString(values) +
                       "} going to add to" + table);
@@ -295,7 +288,6 @@ public class MessageConsoleConnector {
         if (log.isDebugEnabled()) {
             log.debug("Record {id: " + recordId + ", column: " + Arrays.toString(columns) + ", values: " + Arrays.toString(values) + "} going to update to" + table);
         }
-
         ResponseRecord responseRecord = new ResponseRecord();
         Gson gson = RESPONSE_RECORD_BUILDER.serializeNulls().create();
         responseRecord.setResult(OK);
@@ -322,14 +314,12 @@ public class MessageConsoleConnector {
         try {
             List<Column> resultColumns = new ArrayList<>();
             EntityBean[] entityBeans = stub.getArbitraryList(table, recordId);
-
             if (entityBeans != null) {
                 for (EntityBean entityBean : entityBeans) {
                     Column column = new Column(entityBean.getColumnName(), entityBean.getValue(), entityBean.getType());
                     resultColumns.add(column);
                 }
             }
-
             responseArbitraryField.setColumns(resultColumns);
         } catch (Exception e) {
             String errorMsg = "Unable to get arbitrary fields for record[" + recordId + "] in table[" + table + "]";
@@ -337,7 +327,6 @@ public class MessageConsoleConnector {
             responseArbitraryField.setResult(ERROR);
             responseArbitraryField.setMessage(errorMsg);
         }
-
         return gson.toJson(responseArbitraryField);
     }
 
@@ -348,7 +337,6 @@ public class MessageConsoleConnector {
         ResponseArbitraryField responseArbitraryField = new ResponseArbitraryField();
         Gson gson = RESPONSE_ARBITRARY_FIELD_BUILDER.serializeNulls().create();
         responseArbitraryField.setResult(OK);
-
         try {
             stub.deleteArbitraryField(table, recordId, fieldName);
         } catch (Exception e) {
@@ -357,7 +345,6 @@ public class MessageConsoleConnector {
             responseArbitraryField.setResult(ERROR);
             responseArbitraryField.setMessage(errorMsg);
         }
-
         return gson.toJson(responseArbitraryField);
     }
 
@@ -389,7 +376,6 @@ public class MessageConsoleConnector {
         String msg;
         TableBean tableBean = new TableBean();
         tableBean.setName(table);
-
         Gson gson = new Gson();
         List<TableSchemaColumn> columnList = gson.fromJson(detailsJsonString, TABLE_SCHEMA_TYPE);
         ColumnBean[] columns = new ColumnBean[columnList.size()];
@@ -422,7 +408,6 @@ public class MessageConsoleConnector {
         String msg;
         TableBean tableBean = new TableBean();
         tableBean.setName(table);
-
         Gson gson = new Gson();
         List<TableSchemaColumn> columnList = gson.fromJson(detailsJsonString, TABLE_SCHEMA_TYPE);
         ColumnBean[] columns = new ColumnBean[columnList.size()];
@@ -460,7 +445,6 @@ public class MessageConsoleConnector {
             log.error("Unable to delete table due to " + e.getMessage(), e);
             msg = "Unable to delete table due to " + e.getMessage();
         }
-
         return msg;
     }
 
@@ -469,18 +453,70 @@ public class MessageConsoleConnector {
         Gson gson = new GsonBuilder().serializeNulls().create();
         try {
             TableBean tableInfo = stub.getTableInfoWithIndicesInfo(table);
-            for (ColumnBean column : tableInfo.getColumns()) {
-                TableSchemaColumn schemaColumn = new TableSchemaColumn();
-                schemaColumn.setColumn(column.getName());
-                schemaColumn.setType(column.getType());
-                schemaColumn.setIndex(column.getIndex());
-                schemaColumn.setPrimary(column.getPrimary());
-                tableSchemaColumns.add(schemaColumn);
+            if (tableInfo != null && tableInfo.getColumns() != null) {
+                for (ColumnBean column : tableInfo.getColumns()) {
+                    TableSchemaColumn schemaColumn = new TableSchemaColumn();
+                    schemaColumn.setColumn(column.getName());
+                    schemaColumn.setType(column.getType());
+                    schemaColumn.setIndex(column.getIndex());
+                    schemaColumn.setPrimary(column.getPrimary());
+                    tableSchemaColumns.add(schemaColumn);
+                }
             }
         } catch (Exception e) {
             log.error("Unable to get table information for table:" + table, e);
         }
-
         return gson.toJson(tableSchemaColumns);
+    }
+
+
+    public boolean isPaginationSupported() {
+        try {
+            return stub.isPaginationSupported();
+        } catch (RemoteException e) {
+            log.error("Unable to check whether pagination support available or not.");
+        }
+        return false;
+    }
+
+    public String scheduleDataPurging(String table, String time, String retentionPeriod, boolean enable) {
+        String cron = null;
+        String msg;
+        if (enable) {
+            if (time != null && time.length() == 5) {
+                int hour = Integer.parseInt(time.substring(0, 2));
+                int min = Integer.parseInt(time.substring(3));
+                cron = "0 " + min + " " + hour + " * * ?";
+            } else {
+                cron = time;
+            }
+        }
+        try {
+            stub.scheduleDataPurging(table, cron, Integer.parseInt(retentionPeriod));
+            if (enable) {
+                msg = "Data purging task for " + table + " scheduled successfully.";
+            } else {
+                msg = "Data purging task for " + table + " removed successfully.";
+            }
+        } catch (Exception e) {
+            msg = "Unable to schedule task due to " + e.getMessage();
+            log.error("Unable to schedule data puring task for " + table, e);
+        }
+        return msg;
+    }
+
+    public String getDataPurgingDetails(String table) {
+        Gson gson = new Gson();
+        ScheduleTask scheduleTask = new ScheduleTask();
+        try {
+            ScheduleTaskInfo dataPurgingDetails = stub.getDataPurgingDetails(table);
+            if (dataPurgingDetails != null) {
+                scheduleTask.setCronString(dataPurgingDetails.getCronString());
+                scheduleTask.setRetentionPeriod(dataPurgingDetails.getRetentionPeriod());
+            }
+        } catch (Exception e) {
+            log.error("Unable to get schedule task information for table:" + table, e);
+        }
+        return gson.toJson(scheduleTask);
     }
 }

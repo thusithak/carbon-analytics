@@ -17,6 +17,8 @@
 */
 package org.wso2.carbon.analytics.dataservice;
 
+import org.wso2.carbon.analytics.dataservice.commons.AnalyticsDrillDownRequest;
+import org.wso2.carbon.analytics.dataservice.commons.DrillDownResultEntry;
 import org.wso2.carbon.analytics.dataservice.commons.IndexType;
 import org.wso2.carbon.analytics.dataservice.commons.SearchResultEntry;
 import org.wso2.carbon.analytics.dataservice.commons.exception.AnalyticsIndexException;
@@ -216,6 +218,20 @@ public interface SecureAnalyticsDataService extends AnalyticsRecordReader {
     void setIndices(String username, String tableName, Map<String, IndexType> columns) throws AnalyticsIndexException;
 
     /**
+     * Sets the indices for a given table under the given tenant. The indices must be
+     * saved in a persistent storage under analytics data service, to be able to lookup the
+     * indices later, i.e. these indices should be in-effect after a server restart.
+     *
+     * @param username  The username of the user that invoke this method
+     * @param tableName The table name
+     * @param columns   The set of columns to create indices for, and their data types
+     * @param scoreParams The set of columns which is used as score parameters
+     * @throws org.wso2.carbon.analytics.dataservice.commons.exception.AnalyticsIndexException
+     */
+    void setIndices(String username, String tableName, Map<String, IndexType> columns, List<String> scoreParams)
+            throws AnalyticsIndexException;
+
+    /**
      * Returns the declared indices for a given table under the given tenant.
      *
      * @param username  The username of the user that invoke this method
@@ -227,6 +243,9 @@ public interface SecureAnalyticsDataService extends AnalyticsRecordReader {
     Map<String, IndexType> getIndices(String username, String tableName)
             throws AnalyticsIndexException, AnalyticsException;
 
+
+    List<String> getScoreParams(String username, String tableName) throws AnalyticsException,
+                                                                          AnalyticsIndexException;
     /**
      * Clears all the indices for the given table.
      *
@@ -276,6 +295,16 @@ public interface SecureAnalyticsDataService extends AnalyticsRecordReader {
      * @throws AnalyticsException
      */
     public void waitForIndexing(long maxWait) throws AnalyticsTimeoutException, AnalyticsException;
+
+    /**
+     * Returns the drill down results of a search query, given {@link org.wso2.carbon.analytics.dataservice.commons.AnalyticsDrillDownRequest}
+     * @param drillDownRequest The drilldown object which contains the drilldown information
+     * @param facetCount nunber of maximum facets per each field
+     * @param recordCount number of each records in each facet
+     * @return the results containing field names and respective facets
+     * @throws AnalyticsIndexException
+     */
+    Map<String, List<DrillDownResultEntry>> drillDown(String username, AnalyticsDrillDownRequest drillDownRequest) throws AnalyticsIndexException;
 
     /**
      * Destroys and frees any resources taken up by the analytics data service implementation.

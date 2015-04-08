@@ -18,6 +18,8 @@
  */
 package org.wso2.carbon.analytics.dataservice;
 
+import org.wso2.carbon.analytics.dataservice.commons.AnalyticsDrillDownRequest;
+import org.wso2.carbon.analytics.dataservice.commons.DrillDownResultEntry;
 import org.wso2.carbon.analytics.dataservice.commons.IndexType;
 import org.wso2.carbon.analytics.dataservice.commons.SearchResultEntry;
 import org.wso2.carbon.analytics.dataservice.commons.exception.AnalyticsIndexException;
@@ -201,6 +203,19 @@ public interface AnalyticsDataService extends AnalyticsRecordReader {
      * @throws org.wso2.carbon.analytics.dataservice.commons.exception.AnalyticsIndexException
      */
     void setIndices(int tenantId, String tableName, Map<String, IndexType> columns) throws AnalyticsIndexException;
+
+    /**
+     * Sets the indices for a given table under the given tenant. The indices must be
+     * saved in a persistent storage under analytics data service, to be able to lookup the
+     * indices later, i.e. these indices should be in-effect after a server restart.
+     * @param tenantId The tenant id
+     * @param tableName The table name
+     * @param columns The set of columns to create indices for, and their data types
+     * @param scoreParams The set of columns which are used as score parameters
+     * @throws org.wso2.carbon.analytics.dataservice.commons.exception.AnalyticsIndexException
+     */
+    void setIndices(int tenantId, String tableName, Map<String, IndexType> columns, List<String> scoreParams)
+            throws AnalyticsIndexException;
     
     /**
      * Returns the declared indices for a given table under the given tenant.
@@ -211,6 +226,17 @@ public interface AnalyticsDataService extends AnalyticsRecordReader {
      * @throws AnalyticsException 
      */
     Map<String, IndexType> getIndices(int tenantId, String tableName) throws AnalyticsIndexException, AnalyticsException;
+
+
+    /**
+     * Returns the list of scoring parameters which were defined for scoring function, if any.
+     * @param tenantId the tenant id
+     * @param tableName the table name
+     * @return The list of scoring parameters
+     * @throws AnalyticsIndexException
+     * @throws AnalyticsException
+     */
+    List<String> getScoreParams(int tenantId, String tableName) throws AnalyticsIndexException, AnalyticsException;
     
     /**
      * Clears all the indices for the given table.
@@ -247,7 +273,19 @@ public interface AnalyticsDataService extends AnalyticsRecordReader {
      */
     int searchCount(int tenantId, String tableName, String language, 
             String query) throws AnalyticsIndexException;
-    
+
+    /**
+     * Returns the drill down results of a search query, given {@link org.wso2.carbon.analytics.dataservice.commons.AnalyticsDrillDownRequest}
+     * If the numeric ranges need to be drilled down. set the facet ranges in the drilldownRequest object using method "setRangeFacets"
+     * Otherwise set it to null.
+     * @param drillDownRequest The drilldown object which contains the drilldown information
+     * @param facetCount nunber of maximum facets per each field
+     * @param recordCount number of each records in each facet
+     * @return the results containing field names and respective facets
+     * @throws AnalyticsIndexException
+     */
+    Map<String, List<DrillDownResultEntry>> drillDown(int tenantId, AnalyticsDrillDownRequest drillDownRequest) throws AnalyticsIndexException;
+
     /**
      * This method waits until the current indexing operations for the system is done.
      * @param maxWait Maximum amount of time in milliseconds, if the time is reached, 

@@ -18,20 +18,40 @@
 
 package org.wso2.carbon.analytics.messageconsole.internal;
 
+import org.wso2.carbon.analytics.dataservice.AnalyticsDataService;
 import org.wso2.carbon.analytics.dataservice.SecureAnalyticsDataService;
+import org.wso2.carbon.ntask.core.service.TaskService;
 
 /**
  * This represents a service holder class for message console service.
  */
 public class ServiceHolder {
 
-    private static SecureAnalyticsDataService analyticsDataService;
+    private static SecureAnalyticsDataService secureAnalyticsDataService;
+    private static AnalyticsDataService analyticsDataService;
+    private static TaskService taskService;
 
-    public static void setAnalyticsDataService(SecureAnalyticsDataService analyticsDataService) {
+    public static void setSecureAnalyticsDataService(SecureAnalyticsDataService secureAnalyticsDataService) {
+        ServiceHolder.secureAnalyticsDataService = secureAnalyticsDataService;
+    }
+
+    public static SecureAnalyticsDataService getSecureAnalyticsDataService() {
+        return secureAnalyticsDataService;
+    }
+
+    public static AnalyticsDataService getAnalyticsDataService() {
+        return analyticsDataService;
+    }
+
+    public static void setAnalyticsDataService(AnalyticsDataService analyticsDataService) {
         ServiceHolder.analyticsDataService = analyticsDataService;
     }
 
-    public static SecureAnalyticsDataService getAnalyticsDataService() {
-        return analyticsDataService;
+    public static TaskService getTaskService() {
+        return taskService;
+    }
+
+    public static void setTaskService(TaskService taskService) {
+        ServiceHolder.taskService = taskService;
     }
 }

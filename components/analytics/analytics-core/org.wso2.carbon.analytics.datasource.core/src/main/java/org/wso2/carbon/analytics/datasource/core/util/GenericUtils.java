@@ -19,21 +19,45 @@
 package org.wso2.carbon.analytics.datasource.core.util;
 
 import org.apache.commons.collections.IteratorUtils;
+import org.w3c.dom.Document;
+import org.wso2.carbon.analytics.datasource.commons.AnalyticsCategoryPath;
 import org.wso2.carbon.analytics.datasource.commons.Record;
 import org.wso2.carbon.analytics.datasource.commons.RecordGroup;
 import org.wso2.carbon.analytics.datasource.commons.exception.AnalyticsException;
+import org.wso2.carbon.analytics.datasource.core.internal.ServiceHolder;
 import org.wso2.carbon.analytics.datasource.core.rs.AnalyticsRecordReader;
+import org.wso2.carbon.context.PrivilegedCarbonContext;
+import org.wso2.carbon.ndatasource.common.DataSourceConstants;
+import org.wso2.carbon.ndatasource.common.DataSourceException;
+import org.wso2.carbon.ndatasource.core.CarbonDataSource;
+import org.wso2.carbon.ndatasource.core.DataSourceManager;
+import org.wso2.carbon.ndatasource.core.DataSourceMetaInfo;
+import org.wso2.carbon.ndatasource.core.DataSourceRepository;
+import org.wso2.carbon.ndatasource.core.DataSourceService;
+import org.wso2.carbon.ndatasource.core.SystemDataSourcesConfiguration;
+import org.wso2.carbon.ndatasource.core.utils.DataSourceUtils;
+import org.wso2.carbon.utils.multitenancy.MultitenantConstants;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.io.UnsupportedEncodingException;
+import java.io.*;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import javax.xml.bind.JAXBContext;
 
 /**
  * Generic utility methods for analytics data source implementations.
  */
 public class GenericUtils {
+
+    private static final String ADD_DATA_SOURCE_PROVIDERS_METHOD = "addDataSourceProviders";
 
     private static final byte BOOLEAN_TRUE = 1;
 
@@ -55,7 +79,13 @@ public class GenericUtils {
 
     private static final byte DATA_TYPE_BINARY = 0x07;
 
+    private static final byte DATA_TYPE_CATEGORY = 0x10;
+
     private static final String DEFAULT_CHARSET = "UTF8";
+    
+    private static final String WSO2_ANALYTICS_CONF_DIRECTORY_SYS_PROP = "wso2-analytics-conf-dir";
+    
+    private static DataSourceRepository globalCustomRepo;
 
     public static String getParentPath(String path) {
         if (path.equals("/")) {
@@ -146,6 +176,14 @@ public class GenericUtils {
                 binData = (byte[]) value;
                 buffer.putInt(binData.length);
                 buffer.put(binData);
+            } else if (value instanceof AnalyticsCategoryPath) {
+                buffer.put(DATA_TYPE_CATEGORY);
+                AnalyticsCategoryPath analyticsCategoryPath = (AnalyticsCategoryPath) value;
+                buffer.putFloat(analyticsCategoryPath.getWeight());
+                buffer.putInt(AnalyticsCategoryPath.getCombinedPath(analyticsCategoryPath.getPath())
+                                      .getBytes(DEFAULT_CHARSET).length);
+                buffer.put(AnalyticsCategoryPath.getCombinedPath(analyticsCategoryPath.getPath())
+                                   .getBytes(DEFAULT_CHARSET));
             } else if (value == null) {
                 buffer.put(DATA_TYPE_NULL);
             } else {
@@ -162,28 +200,38 @@ public class GenericUtils {
         int count = 0;
          /* column name length value + data type (including null) */
         count += Integer.SIZE / 8 + 1;
+        try {
             /* column name */
-        count += name.getBytes().length;
-        if (value instanceof String) {
+            count += name.getBytes(DEFAULT_CHARSET).length;
+            if (value instanceof String) {
                 /* string length + value */
-            count += Integer.SIZE / 8;
-            count += ((String) value).getBytes().length;
-        } else if (value instanceof Long) {
-            count += Long.SIZE / 8;
-        } else if (value instanceof Double) {
-            count += Double.SIZE / 8;
-        } else if (value instanceof Boolean) {
-            count += Byte.SIZE / 8;
-        } else if (value instanceof Integer) {
-            count += Integer.SIZE / 8;
-        } else if (value instanceof Float) {
-            count += Float.SIZE / 8;
-        } else if (value instanceof byte[]) {
-            count += Integer.SIZE / 8;
-            count += ((byte[]) value).length;
-        } else if (value != null) {
-            throw new AnalyticsException("Invalid column value type in calculating column "
-                    + "values length: " + value.getClass());
+                count += Integer.SIZE / 8;
+                count += ((String) value).getBytes(DEFAULT_CHARSET).length;
+            } else if (value instanceof Long) {
+                count += Long.SIZE / 8;
+            } else if (value instanceof Double) {
+                count += Double.SIZE / 8;
+            } else if (value instanceof Boolean) {
+                count += Byte.SIZE / 8;
+            } else if (value instanceof Integer) {
+                count += Integer.SIZE / 8;
+            } else if (value instanceof Float) {
+                count += Float.SIZE / 8;
+            } else if (value instanceof byte[]) {
+                count += Integer.SIZE / 8;
+                count += ((byte[]) value).length;
+            } else if (value instanceof AnalyticsCategoryPath) {
+                count += Float.SIZE / 8;
+                count += Integer.SIZE / 8;
+                AnalyticsCategoryPath analyticsCategoryPath = (AnalyticsCategoryPath) value;
+                count += AnalyticsCategoryPath.getCombinedPath(analyticsCategoryPath.getPath())
+                        .getBytes(DEFAULT_CHARSET).length;
+            } else if (value != null) {
+                throw new AnalyticsException("Invalid column value type in calculating column "
+                                             + "values length: " + value.getClass());
+            }
+        } catch (UnsupportedEncodingException e) {
+            throw new AnalyticsException("Default CharSet : " + DEFAULT_CHARSET + " is not supported");
         }
         return count;
     }
@@ -240,6 +288,15 @@ public class GenericUtils {
                         buffer.get(binData);
                         value = binData;
                         break;
+                    case DATA_TYPE_CATEGORY:
+                        float weight = buffer.getFloat();
+                        size = buffer.getInt();
+                        buff = new byte[size];
+                        buffer.get(buff, 0, size);
+                        value = new String(buff, DEFAULT_CHARSET);
+                        value = new AnalyticsCategoryPath(weight, AnalyticsCategoryPath
+                                .getPathAsArray((String) value));
+                        break;
                     case DATA_TYPE_NULL:
                         value = null;
                         break;
@@ -275,19 +332,19 @@ public class GenericUtils {
             /* ignore */
         }
     }
-    
+
     public static String normalizeTableName(String tableName) {
         return tableName.toUpperCase();
     }
-    
+
     public static String calculateTableIdentity(int tenantId, String tableName) {
         return tenantId + "_" + normalizeTableName(tableName);
     }
-    
+
     public static String calculateRecordIdentity(Record record) {
         return calculateTableIdentity(record.getTenantId(), record.getTableName());
     }
-    
+
     public static Collection<List<Record>> generateRecordBatches(List<Record> records) {
         /* if the records have identities (unique table category and name) as the following
          * "ABABABCCAACBDABCABCDBAC", the job of this method is to make it like the following,
@@ -304,7 +361,7 @@ public class GenericUtils {
         }
         return recordBatches.values();
     }
-    
+
     public static String generateRecordID() {
         StringBuilder builder = new StringBuilder();
         builder.append(System.currentTimeMillis());
@@ -312,4 +369,116 @@ public class GenericUtils {
         return builder.toString();
     }
 
+    public static byte[] serializeObject(Object obj) throws AnalyticsException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = null;
+        byte[] result;
+        try {
+            oos = new ObjectOutputStream(baos);
+            oos.writeObject(obj);
+            result = baos.toByteArray();
+        } catch (IOException e) {
+            throw new AnalyticsException("Error serializing object: " + e.getMessage(), e);
+        } finally {
+            GenericUtils.closeQuietly(oos);
+            GenericUtils.closeQuietly(baos);
+        }
+        return result;
+    }
+
+    public static Object deserializeObject(byte[] source) throws AnalyticsException {
+        ByteArrayInputStream bais = new ByteArrayInputStream(source);
+        ObjectInputStream ois = null;
+        Object result;
+        try {
+            ois = new ObjectInputStream(bais);
+            result = ois.readObject();
+        } catch (ClassNotFoundException | IOException e) {
+            throw new AnalyticsException("Error de-serializing object: " + e.getMessage(), e);
+        } finally {
+            GenericUtils.closeQuietly(ois);
+            GenericUtils.closeQuietly(bais);
+        }
+        return result;
+    }
+    
+    private static void addDataSourceProviders(List<String> providers) throws DataSourceException {
+        DataSourceManager dsm = DataSourceManager.getInstance();
+        try {
+            Method method = DataSourceManager.class.getDeclaredMethod(ADD_DATA_SOURCE_PROVIDERS_METHOD, List.class);
+            method.setAccessible(true);
+            method.invoke(dsm, providers);
+        } catch (NoSuchMethodException | SecurityException | IllegalAccessException | 
+                IllegalArgumentException | InvocationTargetException e) {
+            throw new DataSourceException("Error in adding data source providers: " + e.getMessage(), e);
+        }
+    }
+    
+    private static void populateSystemDataSource(DataSourceRepository dsRepo, File sysDSFile) throws DataSourceException {
+        try {
+            JAXBContext ctx = JAXBContext.newInstance(SystemDataSourcesConfiguration.class);
+            Document doc = DataSourceUtils.convertToDocument(sysDSFile);
+            DataSourceUtils.secureResolveDocument(doc, true);
+            SystemDataSourcesConfiguration sysDS = (SystemDataSourcesConfiguration) ctx.createUnmarshaller().
+                    unmarshal(doc);
+            addDataSourceProviders(sysDS.getProviders());
+            for (DataSourceMetaInfo dsmInfo : sysDS.getDataSources()) {
+                dsmInfo.setSystem(true);
+                dsRepo.addDataSource(dsmInfo);
+            }
+        } catch (Exception e) {
+            throw new DataSourceException("Error in initializing system data sources at '" +
+                    sysDSFile.getAbsolutePath() + "' - " + e.getMessage(), e);
+        }
+    }
+    
+    private static DataSourceRepository createGlobalCustomDataSourceRepo() throws DataSourceException {
+        String confDir = System.getProperty(WSO2_ANALYTICS_CONF_DIRECTORY_SYS_PROP);
+        if (confDir == null || confDir.isEmpty()) {
+            throw new IllegalStateException("The Java system property '" + WSO2_ANALYTICS_CONF_DIRECTORY_SYS_PROP + 
+                    "' must be set to initialize non-Carbon env analytics");
+        }
+        String dataSourcesDir = confDir + File.separator + DataSourceConstants.DATASOURCES_DIRECTORY_NAME;
+        DataSourceRepository repo = new DataSourceRepository(MultitenantConstants.SUPER_TENANT_ID);
+        File masterDSFile = new File(dataSourcesDir + File.separator + 
+                DataSourceConstants.MASTER_DS_FILE_NAME);
+        /* initialize the master data sources first */
+        if (masterDSFile.exists()) {
+            populateSystemDataSource(repo, masterDSFile);
+        }
+        /* then rest of the system data sources */
+        File dataSourcesFolder = new File(dataSourcesDir);
+        for (File sysDSFile : dataSourcesFolder.listFiles()) {
+            if (sysDSFile.getName().endsWith(DataSourceConstants.SYS_DS_FILE_NAME_SUFFIX)
+                    && !sysDSFile.getName().equals(DataSourceConstants.MASTER_DS_FILE_NAME)) {
+                populateSystemDataSource(repo, sysDSFile);
+            }
+        }
+        return null;
+    }
+
+    public static Object loadGlobalDataSource(String dsName) throws DataSourceException {
+        DataSourceService service = ServiceHolder.getDataSourceService();
+        if (service != null) {
+            try {
+                PrivilegedCarbonContext.startTenantFlow();
+                PrivilegedCarbonContext.getThreadLocalCarbonContext().setTenantDomain(
+                        MultitenantConstants.SUPER_TENANT_DOMAIN_NAME, true);
+                CarbonDataSource ds = service.getDataSource(dsName);
+                return ds.getDSObject();
+            } finally {
+                PrivilegedCarbonContext.endTenantFlow();
+            }
+        } else {
+            if (globalCustomRepo == null) {
+                synchronized (GenericUtils.class) {
+                    if (globalCustomRepo == null) {
+                        globalCustomRepo = createGlobalCustomDataSourceRepo();
+                    }
+                }
+            }
+            return globalCustomRepo.getDataSource(dsName).getDSObject();
+        }
+    }
+    
 }

@@ -21,6 +21,8 @@ package org.wso2.carbon.analytics.dataservice.restapi;
 public class Constants {
 
 	public static final long MILLISECONDSPERSECOND = 1000;
+    public static final String BASIC_AUTH_HEADER = "Basic";
+
 
 	/**
 	 * Instantiates a new constants.
@@ -35,6 +37,7 @@ public class Constants {
 
 		/** The Constant CREATED. */
 		public static final String CREATED = "created";
+
 		/** The Constant FAILED. */
 		public static final String FAILED = "failed";
 
@@ -44,12 +47,27 @@ public class Constants {
 		/** The Constant NON_EXISTENT. */
 		public static final String NON_EXISTENT = "non-existent";
 
+        /** The Constant UNAUTHORIZED. */
+        public static final String UNAUTHORIZED = "unauthorized";
+
+        /** The Constant NON_EXISTENT. */
+        public static final String UNAUTHENTICATED = "unauthenticated";
+
 		/**
 		 * Instantiates a new status.
 		 */
 		private Status() {
 		}
 	}
+
+    public final static class FacetAttributes {
+
+        /** The constant representing weight attribute */
+        public static final String WEIGHT = "weight";
+
+        /**The constant representing path attribute */
+        public static final String PATH = "path";
+    }
 
     /**
      * The Class ResourcePath.
@@ -79,5 +97,8 @@ public class Constants {
 
 		public static final String INDEXING_DONE = "indexing_done";
 
+		public static final String DRILLDOWN = "drilldown";
+
+		public static final String DRILLDOWNCOUNT = "drilldowncount";
     }
 }

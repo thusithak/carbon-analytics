@@ -19,9 +19,8 @@ package org.wso2.carbon.analytics.dataservice.servlet;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-import org.wso2.carbon.analytics.dataservice.api.commons.AnalyticsAPIConstants;
-import org.wso2.carbon.analytics.dataservice.api.commons.RemoteRecordGroup;
-import org.wso2.carbon.analytics.dataservice.commons.SearchResultEntry;
+import org.wso2.carbon.analytics.dataservice.io.commons.AnalyticsAPIConstants;
+import org.wso2.carbon.analytics.dataservice.io.commons.RemoteRecordGroup;
 import org.wso2.carbon.analytics.dataservice.servlet.exception.AnalyticsAPIAuthenticationException;
 import org.wso2.carbon.analytics.dataservice.servlet.internal.ServiceHolder;
 import org.wso2.carbon.analytics.datasource.commons.Record;
@@ -30,7 +29,6 @@ import org.wso2.carbon.analytics.datasource.commons.exception.AnalyticsException
 
 import javax.servlet.ServletException;
 import javax.servlet.ServletInputStream;
-import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -51,7 +49,7 @@ public class AnalyticsRecordReadProcessor extends HttpServlet {
      */
 
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        String sessionId = req.getParameter(AnalyticsAPIConstants.SESSION_ID);
+        String sessionId = req.getHeader(AnalyticsAPIConstants.SESSION_ID);
         if (sessionId == null || sessionId.trim().isEmpty()) {
             resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, "No session id found, Please login first!");
         } else {
@@ -82,7 +80,7 @@ public class AnalyticsRecordReadProcessor extends HttpServlet {
                         remoteRecordGroup[i].setBinaryRecordGroup(getBinaryRecordGroup(recordGroups[i]));
                         remoteRecordGroup[i].setLocations(recordGroups[i].getLocations());
                     }
-                    resp.setStatus(HttpServletResponse.SC_ACCEPTED);
+                    resp.setStatus(HttpServletResponse.SC_OK);
                     ObjectOutputStream objectOutputStream = new ObjectOutputStream(resp.getOutputStream());
                     objectOutputStream.writeObject(remoteRecordGroup);
                     objectOutputStream.close();
@@ -107,7 +105,7 @@ public class AnalyticsRecordReadProcessor extends HttpServlet {
                         remoteRecordGroup[i].setBinaryRecordGroup(getBinaryRecordGroup(recordGroups[i]));
                         remoteRecordGroup[i].setLocations(recordGroups[i].getLocations());
                     }
-                    resp.setStatus(HttpServletResponse.SC_ACCEPTED);
+                    resp.setStatus(HttpServletResponse.SC_OK);
                     ObjectOutputStream objectOutputStream = new ObjectOutputStream(resp.getOutputStream());
                     objectOutputStream.writeObject(remoteRecordGroup);
                     objectOutputStream.close();
@@ -121,7 +119,7 @@ public class AnalyticsRecordReadProcessor extends HttpServlet {
                 try {
                     RemoteRecordGroup remoteRecordGroupObj = (RemoteRecordGroup) inputStream.readObject();
                     Iterator<Record> records = ServiceHolder.getAnalyticsDataService().readRecords(remoteRecordGroupObj.getRecordGroupFromBinary());
-                    resp.setStatus(HttpServletResponse.SC_ACCEPTED);
+                    resp.setStatus(HttpServletResponse.SC_OK);
                     ObjectOutputStream outputStream = new ObjectOutputStream(resp.getOutputStream());
                     while (records.hasNext()) {
                         Record record = records.next();
@@ -142,7 +140,7 @@ public class AnalyticsRecordReadProcessor extends HttpServlet {
     }
 
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        String sessionId = req.getParameter(AnalyticsAPIConstants.SESSION_ID);
+        String sessionId = req.getHeader(AnalyticsAPIConstants.SESSION_ID);
         if (sessionId == null || sessionId.trim().isEmpty()) {
             resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, "No session id found, Please login first!");
         } else {
@@ -158,7 +156,7 @@ public class AnalyticsRecordReadProcessor extends HttpServlet {
                 try {
                     RemoteRecordGroup remoteRecordGroupObj = (RemoteRecordGroup) inputStream.readObject();
                     Iterator<Record> records = ServiceHolder.getAnalyticsDataService().readRecords(remoteRecordGroupObj.getRecordGroupFromBinary());
-                    resp.setStatus(HttpServletResponse.SC_ACCEPTED);
+                    resp.setStatus(HttpServletResponse.SC_OK);
                     ObjectOutputStream outputStream = new ObjectOutputStream(resp.getOutputStream());
                     while (records.hasNext()) {
                         Record record = records.next();

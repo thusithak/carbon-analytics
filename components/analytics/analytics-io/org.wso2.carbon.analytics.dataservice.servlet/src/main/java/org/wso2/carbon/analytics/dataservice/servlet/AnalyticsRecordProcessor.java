@@ -18,12 +18,10 @@
 package org.wso2.carbon.analytics.dataservice.servlet;
 
 import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
-import org.wso2.carbon.analytics.dataservice.api.commons.AnalyticsAPIConstants;
+import org.wso2.carbon.analytics.dataservice.io.commons.AnalyticsAPIConstants;
 import org.wso2.carbon.analytics.dataservice.servlet.exception.AnalyticsAPIAuthenticationException;
 import org.wso2.carbon.analytics.dataservice.servlet.internal.ServiceHolder;
-import org.wso2.carbon.analytics.datasource.commons.AnalyticsSchema;
 import org.wso2.carbon.analytics.datasource.commons.Record;
 import org.wso2.carbon.analytics.datasource.commons.exception.AnalyticsException;
 
@@ -48,7 +46,7 @@ public class AnalyticsRecordProcessor extends HttpServlet {
      */
 
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        String sessionId = req.getParameter(AnalyticsAPIConstants.SESSION_ID);
+        String sessionId = req.getHeader(AnalyticsAPIConstants.SESSION_ID);
         if (sessionId == null || sessionId.trim().isEmpty()) {
             resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, "No session id found, Please login first!");
         } else {
@@ -69,7 +67,7 @@ public class AnalyticsRecordProcessor extends HttpServlet {
                     PrintWriter outputWriter = resp.getWriter();
                     outputWriter.append(AnalyticsAPIConstants.RECORD_COUNT).append(AnalyticsAPIConstants.SEPARATOR).
                             append(String.valueOf(recordCount));
-                    resp.setStatus(HttpServletResponse.SC_ACCEPTED);
+                    resp.setStatus(HttpServletResponse.SC_OK);
                 } catch (AnalyticsException e) {
                     resp.sendError(HttpServletResponse.SC_EXPECTATION_FAILED, e.getMessage());
                 }
@@ -89,7 +87,7 @@ public class AnalyticsRecordProcessor extends HttpServlet {
      * @throws IOException
      */
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        String sessionId = req.getParameter(AnalyticsAPIConstants.SESSION_ID);
+        String sessionId = req.getHeader(AnalyticsAPIConstants.SESSION_ID);
         if (sessionId == null || sessionId.trim().isEmpty()) {
             resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, "No session id found, Please login first!");
         } else {
@@ -106,7 +104,7 @@ public class AnalyticsRecordProcessor extends HttpServlet {
                 List<Record> records = new Gson().fromJson(recordsJson, recordListType);
                 try {
                     ServiceHolder.getAnalyticsDataService().put(records);
-                    resp.setStatus(HttpServletResponse.SC_ACCEPTED);
+                    resp.setStatus(HttpServletResponse.SC_OK);
                 } catch (AnalyticsException e) {
                     resp.sendError(HttpServletResponse.SC_EXPECTATION_FAILED, e.getMessage());
                 }
@@ -125,7 +123,7 @@ public class AnalyticsRecordProcessor extends HttpServlet {
      * @throws IOException
      */
     protected void doDelete(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        String sessionId = req.getParameter(AnalyticsAPIConstants.SESSION_ID);
+        String sessionId = req.getHeader(AnalyticsAPIConstants.SESSION_ID);
         if (sessionId == null || sessionId.trim().isEmpty()) {
             resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, "No session id found, Please login first!");
         } else {
@@ -143,7 +141,7 @@ public class AnalyticsRecordProcessor extends HttpServlet {
                 try {
                      ServiceHolder.getAnalyticsDataService().delete(tenantIdParam, tableName,
                             timeFrom, timeTo);
-                    resp.setStatus(HttpServletResponse.SC_ACCEPTED);
+                    resp.setStatus(HttpServletResponse.SC_OK);
                 } catch (AnalyticsException e) {
                     resp.sendError(HttpServletResponse.SC_EXPECTATION_FAILED, e.getMessage());
                 }
@@ -156,7 +154,7 @@ public class AnalyticsRecordProcessor extends HttpServlet {
                 List<String> recordIds = new Gson().fromJson(jsonRecordIds, recordIdListType);
                 try {
                     ServiceHolder.getAnalyticsDataService().delete(tenantIdParam, tableName, recordIds);
-                    resp.setStatus(HttpServletResponse.SC_ACCEPTED);
+                    resp.setStatus(HttpServletResponse.SC_OK);
                 } catch (AnalyticsException e) {
                     resp.sendError(HttpServletResponse.SC_EXPECTATION_FAILED, e.getMessage());
                 }

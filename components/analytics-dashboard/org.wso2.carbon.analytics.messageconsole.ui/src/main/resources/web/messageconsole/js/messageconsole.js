@@ -223,6 +223,7 @@ function createJTable() {
                       if (data) {
                           if (tableLoaded == true) {
                               $('#AnalyticsTableContainer').jtable('destroy');
+                              tableLoaded = false;
                           }
                           createMainJTable(fields);
                       }
@@ -292,6 +293,7 @@ function updateActionMethod(postData) {
 }
 
 function deleteRecords(postData) {
+    console.log(postData);
     postData["tableName"] = $("#tableSelect").val();
     return $.Deferred(function ($dfd) {
         $.ajax({
@@ -319,8 +321,39 @@ function tableSelectChange() {
     if (table != '-1') {
         $("#deleteTableButton").show();
         $("#editTableButton").show();
+        $("#purgeRecordButton").show();
     } else {
         $("#deleteTableButton").hide();
         $("#editTableButton").hide();
+        $("#purgeRecordButton").hide();
     }
+    try {
+        $('#DeleteAllButton').hide();
+        if (tableLoaded == true) {
+            $('#AnalyticsTableContainer').jtable('destroy');
+            tableLoaded = false;
+        }
+    } catch (err) {
+    }
+}
+
+function scheduleDataPurge() {
+    if ($('#dataPurgingCheckBox').is(":checked")) {
+        if (!$("#dataPurgingForm").validationEngine('validate')) {
+            return false;
+        }
+    }
+    $.post('/carbon/messageconsole/messageconsole_ajaxprocessor.jsp?type=' + typeSavePurgingTask,
+            {
+                tableName: $("#tableSelect").val(),
+                cron: $('#dataPurgingScheudleTime').val(),
+                retention: $('#dataPurgingDay').val(),
+                enable: $('#dataPurgingCheckBox').is(":checked")
+            },
+           function (result) {
+               var label = document.getElementById('dataPurgingMsgLabel');
+               label.style.display = 'block';
+               label.innerHTML = result;
+           });
+    return true;
 }
